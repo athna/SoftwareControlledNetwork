@@ -27,6 +27,11 @@ from ryu.ofproto.ofproto_v1_2 import OFPG_ANY
 import random
 import time
 
+"""
+TBD:
+    Instead of printing, use a logging file 
+    
+"""
 
 class SimpleSwitch13(app_manager.RyuApp):
     OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
@@ -73,6 +78,10 @@ class SimpleSwitch13(app_manager.RyuApp):
         datapath = ev.msg.datapath
         ofproto = datapath.ofproto
         parser = datapath.ofproto_parser
+
+        # To remove previous flow rules from datapath
+        print("Removing the existing rules in DP-switches: {}".format(datapath.id))
+        [self.remove_legacy_flows(datapath, n) for n in range(0, 10)]
         
         # install table-miss flow entry
         match = parser.OFPMatch()
@@ -171,3 +180,25 @@ class SimpleSwitch13(app_manager.RyuApp):
                                     match=match, instructions=inst)
         datapath.send_msg(mod)
 
+    def remove_legacy_flows(self, datapath, table_id):
+        """Removing all flow entries."""
+        parser = datapath.ofproto_parser
+        ofproto = datapath.ofproto
+        empty_match = parser.OFPMatch()
+        instructions = []
+        flow_mod = self.remove_table_flows(datapath, table_id,
+                                        empty_match, instructions)
+        datapath.send_msg(flow_mod)
+    
+
+    def remove_table_flows(self, datapath, table_id, match, instructions):
+        """Create OFP flow mod message to remove flows from table."""
+        ofproto = datapath.ofproto
+        flow_mod = datapath.ofproto_parser.OFPFlowMod(datapath, 0, 0, table_id,
+                                                      ofproto.OFPFC_DELETE, 0, 0,
+                                                      1,
+                                                      ofproto.OFPCML_NO_BUFFER,
+                                                      ofproto.OFPP_ANY,
+                                                      OFPG_ANY, 0,
+                                                      match, instructions)
+        return flow_mod
