@@ -38,18 +38,14 @@ import uuid
 #The supported version are ofproto_v1_0 and ofproto_v1_3
 OPENFLOW_PROTOCOL = ofproto_v1_3
 
+# Run instructions
 # run with ryu-manager <filenameWithout.py> --wsapi-port 8880
 # for example run with ryu-manager template --wsapi-port 8880
-
-agent_name = 'sdn_assignment_app'
-
 
 #########################################################
 # SDN application                                       #
 # This contains the SDN logic that runs your controller #
 #########################################################
-<<<<<<< HEAD
-
 class SDNapp(app_manager.RyuApp):
     OFP_VERSIONS = [OPENFLOW_PROTOCOL.OFP_VERSION]
     _CONTEXTS = {'wsgi': WSGIApplication}
@@ -74,8 +70,8 @@ class SDNapp(app_manager.RyuApp):
         wsgi.register(RESTControlAPI, self.data)
 
     def _initialize_vlan_ports(self):
-        # Initialize VLANs to empty values - The dictionary is populated based on inputs from REST API
-        self.logger.info("Dictionary to register VLAN tags associated with VMs")
+        # Initialize VLANs to empty values
+        
         self.data["ports"]  = {}
         link_ids            = ["1A", "1B", "3A", "3B", "4A", "4B", "6A", "6B"]
         for link_id in link_ids:
@@ -83,7 +79,6 @@ class SDNapp(app_manager.RyuApp):
     
     def _initialize_load_balancing(self):
         """ Setting the initial outbound port of all the switches to port-3"""
-        self.logger.info("Setting a default outbound port on all switches")
         self.switch_last_port = {}
         for s in self.virtual_switches:
             self.switch_last_port[s] = 3
@@ -108,8 +103,7 @@ class SDNapp(app_manager.RyuApp):
         dst = eth_pkt.dst
         src = eth_pkt.src
         in_port = msg.match['in_port']
-        if vlan_pkt:
-            vid = vlan_pkt.vid
+        if vlan_pkt:    vid = vlan_pkt.vid
         self.logger.info("packet in %s %s %s %s %s", dpid, src, dst, in_port, vid)
         
         # MAC address learning to avoid FLOODing next time.
@@ -124,7 +118,7 @@ class SDNapp(app_manager.RyuApp):
             out_port = self.mac_to_port[dpid][dst]
             output_ports= [self.mac_to_port[dpid][dst]]
             if dpid in self.virtual_switches:
-                if out_port in self.switch_host_ports:       # [1,2]
+                if out_port in [1,2]:
                     # Find the link-ID and corresponding VLAN-ID, AND pop this VLAN-ID
                     if out_port == 1: link_id = str(dpid) + "A"
                     else:             link_id = str(dpid) + "B"
@@ -152,7 +146,7 @@ class SDNapp(app_manager.RyuApp):
                 output_ports= [ofproto.OFPP_FLOOD]
             else:
                 # Run selective Broadcasting/Flooding for virtual switches
-                if in_port in self.switch_host_ports:       # [1,2]
+                if in_port in [1,2]:
                     # If packet comes from host-ports, we attempt to find port's VLAN-ID and push it on to packet.
                     if in_port == 1:  link_id = str(dpid) + "A"
                     else:             link_id = str(dpid) + "B"
@@ -232,189 +226,7 @@ class SDNapp(app_manager.RyuApp):
         else:
             if dpid in self.datapaths:
                 del self.datapaths[dpid]
-            self.logger.info(str(dpid)+": Switch disconnected")
-=======
-class SDNapp(app_manager.RyuApp):
-    OFP_VERSIONS = [OPENFLOW_PROTOCOL.OFP_VERSION]
-    _CONTEXTS = {'wsgi': WSGIApplication}
-
-    def __init__(self, *args, **kwargs):
-        super(SDNapp, self).__init__(*args, **kwargs)
-        self.datapaths          = {}        # Contains the OpenFlowSwitch object for each connected switch
-        self.data               = {}        # Contains the data to pass to the REST API
-        #For example, passing a dictionnary of names and the dictionnary of switches
-        self.data["names"]      = {}
-        self.data["switches"]   = self.datapaths
-        self.mac_to_port        = {}
-        self.virtual_switches   = [1,3,4,6]
-        self.physical_switches  = [2,5]
-        self.switch_host_ports  = [1,2]
-        self._initialize_load_balancing()
-        self._initialize_vlan_ports()
-        wsgi = kwargs['wsgi']
-        # self.data object is given to the RESTControlAPI, and within it we can store all the parameters upon parsing the REST query.
-        # Beware! a copy of data is given to the app, not data itself, so any structural modifications made in the copy of data would be lost
-        # So it has to be done here before registering to the app.
-        wsgi.register(RESTControlAPI, self.data)
-
-    def _initialize_vlan_ports(self):
-        # Initialize VLANs to empty values
-        self.data["ports"]  = {}
-        link_ids            = ["1A", "1B", "3A", "3B", "4A", "4B", "6A", "6B"]
-        for link_id in link_ids:
-            self.data["ports"][link_id] = None
-    
-    def _initialize_load_balancing(self):
-        """ Setting the initial outbound port of all the switches to port-3"""
-        self.switch_last_port = {}
-        for s in self.virtual_switches:
-            self.switch_last_port[s] = 3
-
-    #This handles the packet in events (reactive)
-    @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
-    def _packet_in_handler(self, ev):
-        msg = ev.msg
-        datapath = msg.datapath
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        
-        # Get datapath-ID to identify OpenFlow switches.
-        dpid = datapath.id          # dpid = hex(ev.dp.id)
-        self.mac_to_port.setdefault(dpid, {})
-        
-        # Analyse the received packets using the packet library.
-        pkt = packet.Packet(msg.data)
-        eth_pkt = pkt.get_protocol(ethernet.ethernet)           # Get Ethernet packet
-        vlan_pkt = pkt.get_protocol(vlan.vlan)                  # Get VLAN VID from packet
-        vid = 0
-        dst = eth_pkt.dst
-        src = eth_pkt.src
-        in_port = msg.match['in_port']
-        if vlan_pkt:    vid = vlan_pkt.vid
-        self.logger.info("packet in %s %s %s %s %s", dpid, src, dst, in_port, vid)
-        
-        # MAC address learning to avoid FLOODing next time.
-        self.mac_to_port[dpid][src] = in_port
-        output_ports = []
-        flood        = False
-        pop_vlan     = False
-        push_vlan    = False
-        
-        # If the destination MAC address is already learned, Find corresponding output port. Else, Flood.
-        if dst in self.mac_to_port[dpid]:
-            out_port = self.mac_to_port[dpid][dst]
-            output_ports= [self.mac_to_port[dpid][dst]]
-            if dpid in self.virtual_switches:
-                if out_port in [1,2]:
-                    # Find the link-ID and corresponding VLAN-ID, AND pop this VLAN-ID
-                    if out_port == 1: link_id = str(dpid) + "A"
-                    else:             link_id = str(dpid) + "B"
-                    link_vid = self.data["ports"][link_id ]
-                    
-                    if type(link_vid)==type(1) and link_vid != None:
-                        if vid == link_vid:
-                            pop_vlan = True
-                        else:
-                            print("Packet with Mismatching VLAN-ID arrived at switch='{}' & Link-id '{}'".format(dpid, link_id))
-                            return
-            
-                else:
-                    # Based on input-port, find the link-ID and the corresponding VLAN-ID, AND push the VLAN-ID on to the packet
-                    if in_port == 1:  link_id = str(dpid) + "A"
-                    else:             link_id = str(dpid) + "B"
-                    output_ports  = [self.run_load_balancing(dpid)]
-                    link_vid      = self.data["ports"][link_id]
-                    if link_vid  != None:    
-                        push_vlan =True
-                    
-        else:
-            flood = True
-            if dpid in self.physical_switches:
-                output_ports= [ofproto.OFPP_FLOOD]
-            else:
-                # Run selective Broadcasting/Flooding for virtual switches
-                if in_port in [1,2]:
-                    # If packet comes from host-ports, we attempt to find port's VLAN-ID and push it on to packet.
-                    if in_port == 1:  link_id = str(dpid) + "A"
-                    else:             link_id = str(dpid) + "B"
-                    link_vid = self.data["ports"][link_id]
-                    if link_vid != None:        # Need to push VLAN, if REST API has provided a VLAN-ID for the port.
-                        push_vlan = True
-                    output_ports = self.selective_flooding(in_port)
-                    
-                else:
-                    # Incoming packet from port: 3 or 4
-                    output_ports= []
-                    port_to_hosts = ["A", "B"]
-                    for p in port_to_hosts:
-                        private_linkid = '{}{}'.format(dpid, p)
-                        link_vid = self.data["ports"][private_linkid]
-                        if p == "A": output_ports += [1]
-                        else:        output_ports += [2]
-                        
-                        # if the packet is going to switch-ports 1 & 2, and VLAN-ID is present, the strip the VLAN.
-                        if (link_vid != None) and (vid == link_vid):
-                            pop_vlan = True          
-                        
-        # construct action list.
-        actions=[]
-        
-        if pop_vlan and output_ports:
-            print("Strip the the VLAN-ID")
-            actions.append(parser.OFPActionPopVlan())
-        elif push_vlan and output_ports and link_vid:
-            print("Push VLAN-ID on the packet")
-            actions.append(parser.OFPActionPushVlan())
-            actions.append(parser.OFPActionSetField(vlan_vid=link_vid|ofproto_v1_3.OFPVID_PRESENT))
-            
-        for port in output_ports:
-            actions.append(parser.OFPActionOutput(port))
-        
-        # install a flow to avoid packet_in next time.
-        if not flood:
-            if pop_vlan is True:     match = parser.OFPMatch(in_port=in_port, eth_dst=dst, vlan_vid=link_vid)
-            else:               match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-            # Adding a flow rule to the switch
-            self.add_flow(datapath, 1, match, actions)
-    
-        # construct packet_out message and send it.
-        out = parser.OFPPacketOut(datapath=datapath,
-        						  buffer_id=ofproto.OFP_NO_BUFFER,
-        						  in_port=in_port, actions=actions,
-        						  data=msg.data)
-        
-        datapath.send_msg(out)
-
-
-    #This handles the switch interaction at the startup, or on termination
-    @set_ev_cls(dpset.EventDP, dpset.DPSET_EV_DISPATCHER)
-    def switch_features_handler(self, ev):
-        dpid = hex(ev.dp.id)
-        datapath = ev.dp
-        ofproto = datapath.ofproto
-        parser = datapath.ofproto_parser
-        
-        #The switch connects
-        if ev.enter:
-            # Creates the object to handle the switch and add it to the dict
-            self.datapaths[dpid] = OpenFlowSwitch(ev.dp, dpid)
-            print(dpid+": Switch connected")
-
-            #Delete existing flows to start with a clean state
-            delete_flows(self.datapaths[dpid])
-
-            # install the table-miss flow entry.
-            match = parser.OFPMatch()
-            actions = [parser.OFPActionOutput(ofproto.OFPP_CONTROLLER,
-                                          ofproto.OFPCML_NO_BUFFER)]
-            self.add_flow(datapath, 0, match, actions)
-
-        #The switch disconnects
-        else:
-            if dpid in self.datapaths:
-                del self.datapaths[dpid]
-            print(dpid+": Switch disconnected")
->>>>>>> branch 'master' of git@github.com:hammadkabir/SoftwareControlledNetwork.git
+            self.logger.info(dpid+": Switch disconnected")
 
     def add_flow(self, datapath, priority, match, actions):
         ofproto = datapath.ofproto
@@ -508,7 +320,7 @@ class RESTControlAPI(ControllerBase):
             if "portid" in kwargs and "vlan" in req.json:
                 portid = kwargs["portid"]
                 vlan = req.json["vlan"]
-                print("portid, vlan: ", portid, vlan)
+                self.logger.info("portid={}, vlan={} ".format(portid, vlan))
                 if portid in self.data["ports"]:
                     self.data["ports"][portid] = vlan
                     return "\n"
