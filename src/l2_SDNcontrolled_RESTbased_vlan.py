@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from ryu.base import app_manager
 from ryu.ofproto import ether, inet, ofproto_v1_0, ofproto_v1_3
 from ryu.app.wsgi import ControllerBase
@@ -31,7 +30,6 @@ from ryu.lib.packet import packet
 from ryu.lib.packet import ethernet
 from ryu.lib.packet import vlan
 
-
 import json
 import uuid
 
@@ -46,6 +44,7 @@ OPENFLOW_PROTOCOL = ofproto_v1_3
 # SDN application                                       #
 # This contains the SDN logic that runs your controller #
 #########################################################
+
 class SDNapp(app_manager.RyuApp):
     OFP_VERSIONS = [OPENFLOW_PROTOCOL.OFP_VERSION]
     _CONTEXTS = {'wsgi': WSGIApplication}
@@ -71,7 +70,7 @@ class SDNapp(app_manager.RyuApp):
 
     def _initialize_vlan_ports(self):
         # Initialize VLANs to empty values
-        
+        self.logger.info("Initiating dictionary to register VLAN tags associated to each VM")
         self.data["ports"]  = {}
         link_ids            = ["1A", "1B", "3A", "3B", "4A", "4B", "6A", "6B"]
         for link_id in link_ids:
@@ -79,6 +78,7 @@ class SDNapp(app_manager.RyuApp):
     
     def _initialize_load_balancing(self):
         """ Setting the initial outbound port of all the switches to port-3"""
+        self.logger.info("Setting the default port to 3, for all the outbound connections")
         self.switch_last_port = {}
         for s in self.virtual_switches:
             self.switch_last_port[s] = 3
